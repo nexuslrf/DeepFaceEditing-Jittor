@@ -1,5 +1,17 @@
+from collections import OrderedDict
 import torch
 import torch.nn as nn
+import pickle
+
+def pkl_to_state_dict(pkl_path):
+    with open(pkl_path, 'rb') as f:
+        ckpt = pickle.load(f)
+
+    state_dict = OrderedDict()
+    for k, v in ckpt.items():
+        state_dict[k] = torch.from_numpy(v)
+    return state_dict
+
 
 # Definition of normalization layer
 class AdaptiveInstanceNorm2d(nn.Module):
@@ -93,19 +105,19 @@ class GeometryEncoder(nn.Module):
         super(GeometryEncoder, self).__init__()        
         activation = nn.ReLU()        
 
-        model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, 7, padding=0), norm_layer(ngf), activation]
+        model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, 7, padding=0), norm_layer(ngf, affine=True), activation]
         ### downsample
         for i in range(n_downsampling):
             mult = 2**i
             model += [nn.Conv2d(ngf * mult, ngf * mult * 2, 3, stride=2, padding=1),
-                      norm_layer(ngf * mult * 2), activation]
+                      norm_layer(ngf * mult * 2, affine=True), activation]
 
         mult = 2**n_downsampling
         for i in range(n_blocks):
             model += [ResnetBlock(ngf * mult, norm_type = 'in', padding_type=padding_type)]
         self.model = nn.Sequential(*model)
             
-    def execute(self, input):
+    def forward(self, input):
         return self.model(input)
 
 class StyleEncoder(nn.Module):
@@ -125,7 +137,7 @@ class StyleEncoder(nn.Module):
         
         self.output_dim = dim
 
-    def execute(self, x):
+    def forward(self, x):
         return self.model(x)
 
 class Part_Generator(nn.Module):
@@ -146,7 +158,7 @@ class Part_Generator(nn.Module):
             model += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2), 3, stride=2, padding=1, output_padding=1)]
             model += [AdaptiveInstanceNorm2d(int(ngf * mult / 2))]
             model += [activation]
-        model += [nn.ReflectionPad2d(3), nn.Conv(ngf, output_nc, 7, padding=0), nn.Tanh()]        
+        model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, 7, padding=0), nn.Tanh()]        
         self.model = nn.Sequential(*model)
   
         # style encoder
@@ -154,7 +166,7 @@ class Part_Generator(nn.Module):
 
     def assign_adain_params(self, adain_params, model):
         # assign the adain_params to the AdaIN layers in model
-        for m in model:
+        for m in model.modules():
             if m.__class__.__name__ == "AdaptiveInstanceNorm2d":
                 mean = adain_params[:, :m.num_features]
                 std = adain_params[:, m.num_features:2*m.num_features]
@@ -249,12 +261,12 @@ class Combine_Model(nn.Module):
             
         for key in self.part.keys():
             print("load the weight of " + key)
-            self.Sketch_Encoder_Part[key].load_state_dict(torch.load('./checkpoints/sketch_encoder/sketch_encoder_' + key + '.pth'))
-            self.Image_Encoder_Part[key].load_state_dict(torch.load('./checkpoints/image_encoder/image_encoder_' + key + '.pth'))
-            self.Gen_Part[key].load_state_dict(torch.load('./checkpoints/generator/generator_' + key + '.pth'))
+            self.Sketch_Encoder_Part[key].load_state_dict(pkl_to_state_dict('./checkpoints/sketch_encoder/sketch_encoder_' + key + '.pkl'))
+            self.Image_Encoder_Part[key].load_state_dict(pkl_to_state_dict('./checkpoints/image_encoder/image_encoder_' + key + '.pkl'))
+            self.Gen_Part[key].load_state_dict(pkl_to_state_dict('./checkpoints/generator/generator_' + key + '.pkl'))
 
         print("load the weight of global fuse")
-        self.netG.load_state_dict(torch.load('./checkpoints/global_fuse.pkl'))
+        self.netG.load_state_dict(pkl_to_state_dict('./checkpoints/global_fuse.pkl'))
 
     def inference(self, sketch, appear, geo_type):
         part_feature = {}

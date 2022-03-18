@@ -41,7 +41,7 @@ if __name__ == '__main__':
     if args.gen_sketch:
         sketch_netG = networks.GlobalGenerator(input_nc = 3, output_nc = 3, 
                                         ngf = 32, n_downsampling = 4, n_blocks = 9)
-        ckpt = torch.load("./checkpoints/sketch_generator.pth")
+        ckpt = networks.pkl_to_state_dict("./checkpoints/sketch_generator.pkl")
         sketch_netG.load_state_dict(ckpt)
         sketch_netG.to(device)
         geo_img = read_img(args.geo)
