@@ -33,6 +33,8 @@ Recent facial image synthesis methods have been mainly based on conditional gene
   pip install -r requirements.txt
   ```
 
+**TODO**: add a PyTorch version.
+
 ## How to use
 
 Please download the pre-trained model <a href="https://drive.google.com/file/d/19lUuajYEULTTjqTb0kgV_2HtOVpq1t76/view?usp=sharing
